@@ -2,27 +2,33 @@ package com.demo;
 
 import java.time.Instant;
 
+/**
+ * A simple object (model) class
+ *
+ * @author VuKD
+ */
 public class Item {
+
     private long id;
     private Instant timestamp;
 
-    public Item(long id){
+    public Item(long id) {
         this.id = id;
+        this.timestamp = Instant.now();
     }
 
-    public Long getId() {
+    public long getId() {
         return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public Instant getTimestamp() {
         return timestamp;
     }
 
-    public void setTimestamp(Instant timestamp){
-        this.timestamp = timestamp;
+    @Override
+    public String toString() {
+        StringBuffer sb = new StringBuffer();
+        sb.append("Id: ").append(this.id).append(", timestamp: ").append(this.timestamp);
+        return sb.toString();
     }
 }

@@ -1,89 +1,137 @@
 package com.demo;
 
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicLong;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThan;
+import net.minidev.json.JSONArray;
 import org.junit.Before;
-import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.MethodSorters;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.hamcrest.Matchers.notNullValue;
-import org.junit.Assert;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertEquals;
-import org.springframework.http.MediaType;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
-@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class ItemRestControllerTests {
 
-    private static final int NUM_ITEMS = 20000;
+    private final AtomicLong counter = new AtomicLong();
+    private final String URL = "/items/";
+    private MockMvc mvc;
 
     @Autowired
     private WebApplicationContext context;
-
-    private MockMvc mvc;
+    //@MockBean
+    @Autowired
+    private ItemService itemService;
 
     @Before
     public void setUp() {
         this.mvc = MockMvcBuilders.webAppContextSetup(this.context).build();
     }
 
-    // ================== Initial empty list  ==================
+
+    // ================== Initial ==================
     @Test
-    public void testA_Get() throws Exception {
-        this.mvc.perform(get("/items").accept(MediaType.APPLICATION_JSON))
+    public void testGetInitial() throws Exception {
+        itemService.clear();
+        this.mvc.perform(get(URL)
+                .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(content()
+                        .contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(0))).andReturn();
     }
 
-    // ================== Create 1 Item  ==================
+
+    // ================== Create Item (s) ==================
+
     @Test
-    public void testB_PostOne() throws Exception {
-        this.mvc.perform(post("/items")).andExpect(status().isCreated())
-                .andExpect(jsonPath("id", equalTo(1)))
-                .andExpect(jsonPath("timestamp", notNullValue()));
+    public void testCreateItem() throws Exception {
+        itemService.clear();
+        assertEquals(0, itemService.getItems().size());
+        itemService.add(new Item(counter.incrementAndGet()));
+        assertEquals(1, itemService.getItems().size());
+
+        this.mvc.perform(get(URL)).andExpect(status().isOk())
+                .andExpect(jsonPath("$", isA(JSONArray.class)))
+                //.andExpect(jsonPath("$.length()", is(1)))
+                .andExpect(jsonPath("$[0].id", is(1)))
+                .andExpect(jsonPath("$[0].timestamp", isA(String.class)))
+                .andExpect(jsonPath("$", hasSize(1))).andReturn();
+
     }
 
-    // ================== Create New Items ==================
     @Test
-    public void testC_PostMulti() throws Exception {
+    public void testPost() throws Exception {
+        this.mvc.perform(MockMvcRequestBuilders.post(URL)
+                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .accept(MediaType.APPLICATION_JSON_UTF8))
+                .andExpect((status().isCreated()));
+    }
 
-        for (int i = 1; i < NUM_ITEMS; i++) {
-            this.mvc.perform(post("/items")).andExpect(status().isCreated());
+
+    // ================== Get the items POSTed in the last 2 seconds ==================
+    @Test
+    public void testGetLastPOSTedByTime() {
+
+        List<Item> listOfAllItemsDisplay = new ArrayList<>();
+
+        int createdSize = ItemService.RECENT_POSTED_SIZE + 10;//test with a random number
+
+        ItemService ir = new ItemService();
+        for (int i = 0; i < createdSize; i++) {
+                ir.add(new Item(counter.incrementAndGet()));
         }
+
+        listOfAllItemsDisplay.addAll(ir.getItems());
+
+        assertEquals(createdSize, listOfAllItemsDisplay.size());
+
+        listOfAllItemsDisplay.forEach((item) -> {
+            assert (Instant.now().getEpochSecond() - item.getTimestamp().getEpochSecond() <= ItemService.ELAPSED_TIME);
+        });
     }
 
-    // ================== Get All Items ==================
+
+    // ================== Get the last 100 POSTed Items ==================
     @Test
-    public void testD_Get() throws Exception{
-        //todo
+    public void testGetLastPOSTedBySize() throws Exception {
+
+        List<Item> listOfAllItemsCreated = new ArrayList<>();
+        List<Item> listOfAllItemsDisplay = new ArrayList<>();
+
+        int createdSize = ItemService.RECENT_POSTED_SIZE + 10;//test with a random number > 100
+
+        ItemService ir = new ItemService();
+        for (int i = 0; i < createdSize; i++) {
+            listOfAllItemsCreated.add(ir.add(new Item(counter.incrementAndGet())));
+        }
+
+        Thread.sleep(3000); // 2secs passed
+
+        assertEquals(createdSize, listOfAllItemsCreated.size());  //assert the number of items added
+        listOfAllItemsCreated.forEach((item) -> {   //assert the timestamp older than 2secs
+            assert (item.getTimestamp().getEpochSecond() < Instant.now().minusSeconds(ItemService.ELAPSED_TIME).getEpochSecond());
+        });
+
+        listOfAllItemsDisplay.addAll(ir.getItems());
+
+        //expect getting the list of last 100 POSTed items
+        //assert the displayed items <=100
+        assertEquals(ItemService.RECENT_POSTED_SIZE, listOfAllItemsDisplay.size());
     }
 
 }
