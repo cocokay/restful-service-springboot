@@ -67,7 +67,6 @@ public class ItemRestControllerTests {
 
         this.mvc.perform(get(URL)).andExpect(status().isOk())
                 .andExpect(jsonPath("$", isA(JSONArray.class)))
-                //.andExpect(jsonPath("$.length()", is(1)))
                 .andExpect(jsonPath("$[0].id", is(1)))
                 .andExpect(jsonPath("$[0].timestamp", isA(String.class)))
                 .andExpect(jsonPath("$", hasSize(1))).andReturn();

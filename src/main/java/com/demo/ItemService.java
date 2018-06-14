@@ -46,7 +46,6 @@ public class ItemService {
 
         items.forEach((item) -> {
             long diffAsSeconds = ChronoUnit.SECONDS.between(item.getTimestamp(), Instant.now());
-            //System.out.println(item.toString() + " elapsed: " + Duration.between(item.getTimestamp(), Instant.now()).getSeconds());
             if (diffAsSeconds <= ELAPSED_TIME) {
                 listRecent2secs.add(item);
             }
